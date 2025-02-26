@@ -56,6 +56,28 @@
       #apiKeySection {
         margin-bottom: 15px;
       }
+
+      /* Progress Bar Styles */
+      #progressContainer {
+        display: none; /* Hidden by default, will show when fetching */
+        width: 80%;
+        margin: 10px auto;
+        background-color: #ccc;
+        border-radius: 5px;
+        overflow: hidden;
+      }
+
+      #progressBar {
+        height: 20px;
+        width: 0;
+        background-color: #4caf50;
+        transition: width 0.2s ease-in-out;
+      }
+
+      #progressLabel {
+        margin-top: 5px;
+        font-weight: bold;
+      }
     </style>
   </head>
 
@@ -86,8 +108,14 @@
       <strong>Extracted Forum ID:</strong>
       <span id="extractedForumID">None</span>
     </p>
+    <!-- Separate displays for t_i and t_u -->
     <p>
-      <strong>Thread Reference:</strong> <span id="threadReference">None</span>
+      <strong>Thread Ident (t_i):</strong>
+      <span id="extractedThreadIdent">None</span>
+    </p>
+    <p>
+      <strong>Thread Link (t_u):</strong>
+      <span id="extractedThreadLink">None</span>
     </p>
 
     <button id="fetchBtn" onclick="fetchUsernames()">Get Usernames</button>
@@ -104,7 +132,14 @@
 
     <p id="loadingIndicator">🔄 Collecting usernames...</p>
 
+    <!-- Progress Bar -->
+    <div id="progressContainer">
+      <div id="progressBar"></div>
+    </div>
+    <p id="progressLabel"></p>
+
     <script>
+      // Proxy for bypassing CORS, can be changed or removed if your environment doesn’t need it
       const proxyUrl = "https://api.codetabs.com/v1/proxy?quest=";
 
       function saveApiKey() {
@@ -120,6 +155,13 @@
       }
 
       function changeApiKey() {
+        const apiKeyInput = document.getElementById("apiKey");
+        const storedKey = localStorage.getItem("disqusApiKey");
+        if (storedKey) {
+          apiKeyInput.value = storedKey;
+        } else {
+          apiKeyInput.value = "";
+        }
         document.getElementById("apiKeySection").style.display = "block";
         document.getElementById("changeApiKeyBtn").style.display = "none";
       }
@@ -133,6 +175,9 @@
         }
       }
 
+      /**
+       * Extract forum ID, t_i, and t_u from the embed URL and display them.
+       */
       function extractForumAndThread() {
         const disqusUrl = document.getElementById("disqusUrl").value.trim();
         if (disqusUrl) {
@@ -147,6 +192,7 @@
             ? decodeURIComponent(urlParams.get("t_u"))
             : null;
 
+          // Display forum
           if (forumID) {
             document.getElementById("extractedForumID").textContent = forumID;
             localStorage.setItem("forumID", forumID);
@@ -155,31 +201,36 @@
               "Invalid URL";
           }
 
+          // Display t_i
           if (threadID) {
-            document.getElementById(
-              "threadReference"
-            ).textContent = `ident:${threadID}`;
-            localStorage.setItem("threadReference", `ident:${threadID}`);
-          } else if (threadURL) {
-            document.getElementById(
-              "threadReference"
-            ).textContent = `link:${threadURL}`;
-            localStorage.setItem("threadReference", `link:${threadURL}`);
+            document.getElementById("extractedThreadIdent").textContent =
+              threadID;
+            localStorage.setItem("threadIdent", threadID);
           } else {
-            document.getElementById("threadReference").textContent =
-              "Invalid URL";
+            document.getElementById("extractedThreadIdent").textContent =
+              "None";
+            localStorage.setItem("threadIdent", "");
+          }
+
+          // Display t_u
+          if (threadURL) {
+            document.getElementById("extractedThreadLink").textContent =
+              threadURL;
+            localStorage.setItem("threadLink", threadURL);
+          } else {
+            document.getElementById("extractedThreadLink").textContent = "None";
+            localStorage.setItem("threadLink", "");
           }
         } catch (error) {
           document.getElementById("extractedForumID").textContent =
             "Invalid URL";
-          document.getElementById("threadReference").textContent =
-            "Invalid URL";
+          document.getElementById("extractedThreadIdent").textContent = "None";
+          document.getElementById("extractedThreadLink").textContent = "None";
         }
       }
 
       function loadSavedData() {
         const storedDisqusUrl = localStorage.getItem("disqusUrl");
-
         if (storedDisqusUrl) {
           document.getElementById("disqusUrl").value = storedDisqusUrl;
           extractForumAndThread();
@@ -187,11 +238,22 @@
       }
 
       async function fetchUrl(url) {
-        return fetch(url)
-          .then((response) => response.json())
-          .catch((error) => console.error("Error fetching:", error));
+        try {
+          const response = await fetch(url);
+          return await response.json();
+        } catch (error) {
+          console.error("Error fetching:", error);
+          throw error;
+        }
       }
 
+      /**
+       * Returns the internal Disqus thread ID given:
+       * - a forum
+       * - a thread reference (either ident:someID or link:https://...)
+       *
+       * If the thread cannot be found, returns null.
+       */
       async function getThreadID(forum, threadRef, apiKey) {
         try {
           const apiUrl = `https://disqus.com/api/3.0/threads/list.json?forum=${forum}&thread=${threadRef}&api_key=${apiKey}`;
@@ -202,27 +264,66 @@
           if (response.code === 0 && response.response.length > 0) {
             return response.response[0].id;
           } else {
-            alert("Thread not found. Check the URL.");
-            return null;
+            return null; // returning null to indicate not found
           }
         } catch (error) {
-          alert("Error getting thread ID: " + error.message);
+          console.error("Error getting thread ID:", error);
           return null;
         }
       }
 
-      async function getAllUsernames(threadID, apiKey) {
+      /**
+       * Fetches details about the thread to get the total post count (including all comments).
+       */
+      async function getTotalPosts(threadID, apiKey) {
+        try {
+          const apiUrl = `https://disqus.com/api/3.0/threads/details.json?thread=${threadID}&api_key=${apiKey}`;
+          const response = await fetchUrl(
+            proxyUrl + encodeURIComponent(apiUrl)
+          );
+
+          if (response.code === 0) {
+            // 'posts' property includes all top-level + child comments
+            return response.response.posts;
+          } else {
+            throw new Error(response.error);
+          }
+        } catch (error) {
+          alert("Error fetching total post count: " + error.message);
+          return 0;
+        }
+      }
+
+      /**
+       * Fetches all usernames from the given thread ID and updates the progress bar.
+       */
+      async function getAllUsernames(threadID, apiKey, totalPosts) {
         let usernames = new Set();
         let cursor = null;
+        let processed = 0;
 
         const usernamesTextarea = document.getElementById("usernames");
         const userCountSpan = document.getElementById("userCount");
+        const progressContainer = document.getElementById("progressContainer");
+        const progressBar = document.getElementById("progressBar");
+        const progressLabel = document.getElementById("progressLabel");
 
         usernamesTextarea.value = "";
+        userCountSpan.textContent = "0";
+        progressContainer.style.display = "block";
+        progressBar.style.width = "0%";
+        progressLabel.textContent = "";
+
+        // Helper to update the progress bar
+        function updateProgress() {
+          const percentage =
+            totalPosts > 0 ? (processed / totalPosts) * 100 : 0;
+          progressBar.style.width = percentage + "%";
+          progressLabel.textContent = `Processed ${processed} of ${totalPosts} comments`;
+        }
 
         do {
           let apiUrl = `https://disqus.com/api/3.0/posts/list.json?thread=${threadID}&api_key=${apiKey}&limit=100`;
-
           if (cursor) {
             apiUrl += `&cursor=${cursor}`;
           }
@@ -233,36 +334,97 @@
 
           if (response.code === 0) {
             response.response.forEach((post) => {
-              if (!usernames.has(post.author.username)) {
+              if (post.author && post.author.username) {
+                processed++;
                 usernames.add(post.author.username);
-                usernamesTextarea.value += post.author.username + "\n";
+                // Only append to textarea if it's unique
+                // (Though a set is used, we want to avoid duplicates in the output)
+                if (!usernamesTextarea.value.includes(post.author.username)) {
+                  usernamesTextarea.value += post.author.username + "\n";
+                }
               }
             });
 
+            // Update user count and progress
             userCountSpan.textContent = usernames.size;
+            updateProgress();
 
+            // Move to the next cursor if available
             cursor = response.cursor?.hasNext ? response.cursor?.next : null;
           } else {
-            alert("Error fetching usernames.");
+            alert("Error fetching usernames: " + response.response);
             break;
           }
         } while (cursor);
+
+        // If totalPosts was 0 or less, hide progress bar or set it to 100%
+        if (totalPosts <= 0) {
+          progressBar.style.width = "100%";
+          progressLabel.textContent = "Processing complete or no posts found.";
+        }
       }
 
+      /**
+       * Main function that pulls everything together:
+       * 1) Attempts to get the thread ID via ident:{t_i}.
+       * 2) If that fails (returns null), attempts link:{t_u}.
+       * 3) If successful, fetches total posts and processes them with a progress bar.
+       */
       async function fetchUsernames() {
         const forumID = document.getElementById("extractedForumID").textContent;
-        const threadRef =
-          document.getElementById("threadReference").textContent;
+        const ident = localStorage.getItem("threadIdent");
+        const link = localStorage.getItem("threadLink");
         const apiKey = localStorage.getItem("disqusApiKey");
 
+        // Show loading indicator
         document.getElementById("loadingIndicator").style.display = "block";
 
-        const threadID = await getThreadID(forumID, threadRef, apiKey);
+        // Reset progress bar before new fetch
+        const progressContainer = document.getElementById("progressContainer");
+        const progressBar = document.getElementById("progressBar");
+        const progressLabel = document.getElementById("progressLabel");
+        progressContainer.style.display = "none";
+        progressBar.style.width = "0%";
+        progressLabel.textContent = "";
+
+        if (!forumID || !apiKey) {
+          alert("Missing forum ID or API Key. Check your input.");
+          document.getElementById("loadingIndicator").style.display = "none";
+          return;
+        }
+
+        // 1) Try ident if we have a t_i
+        let threadID = null;
+        if (ident) {
+          threadID = await getThreadID(forumID, `ident:${ident}`, apiKey);
+        }
+
+        // 2) If ident fails (returns null) and link is available, try link
+        if (!threadID && link) {
+          let encodedLink = encodeURIComponent(link);
+          threadID = await getThreadID(forumID, `link:${encodedLink}`, apiKey);
+        }
+
         if (threadID) {
-          await getAllUsernames(threadID, apiKey);
+          // Now retrieve total post count
+          const totalPosts = await getTotalPosts(threadID, apiKey);
+          // Retrieve all usernames with progress
+          await getAllUsernames(threadID, apiKey, totalPosts);
+        } else {
+          alert(
+            "Unable to find a thread ID using t_i or t_u. Please check your URL."
+          );
         }
 
         document.getElementById("loadingIndicator").style.display = "none";
+      }
+
+      function copyUsernames() {
+        const usernamesTextarea = document.getElementById("usernames");
+        usernamesTextarea.select();
+        usernamesTextarea.setSelectionRange(0, 99999); // For mobile devices
+        document.execCommand("copy");
+        alert("Usernames copied to clipboard!");
       }
 
       window.onload = () => {
