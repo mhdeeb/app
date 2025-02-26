@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Disqus URL to Username</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        padding: 20px;
+        background-color: #f4f4f4;
+        text-align: center;
+      }
+
+      input,
+      button,
+      textarea {
+        padding: 10px;
+        margin: 10px;
+        font-size: 16px;
+      }
+
+      textarea {
+        width: 80%;
+        height: 150px;
+        resize: none;
+      }
+
+      .copy-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      #apiKeySection {
+        margin-bottom: 15px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h2>Disqus Username Scraper</h2>
+
+    <div id="apiKeySection">
+      <input
+        type="text"
+        id="apiKey"
+        placeholder="Enter Disqus API Key"
+        size="40" />
+      <button onclick="saveApiKey()">Save API Key</button>
+    </div>
+
+    <button id="changeApiKeyBtn" onclick="changeApiKey()" style="display: none">
+      Change API Key
+    </button>
+
+    <p>
+      Enter the Disqus forum ID (shortname) and thread URL to get usernames from
+      comments:
+    </p>
+
+    <input
+      type="text"
+      id="forumID"
+      placeholder="Enter Forum ID (e.g., miruro-no-kuon)"
+      size="40" /><br />
+    <input
+      type="text"
+      id="threadUrl"
+      placeholder="Enter Disqus Thread URL"
+      size="50" />
+    <button onclick="fetchUsernames()">Get Usernames</button>
+
+    <div class="copy-container">
+      <textarea
+        id="usernames"
+        readonly
+        placeholder="Usernames will appear here..."></textarea>
+      <button onclick="copyUsernames()">Copy</button>
+    </div>
+
+    <script>
+      const proxyUrl = "https://api.cors.lol/?url=";
+
+      function saveApiKey() {
+        const apiKey = document.getElementById("apiKey").value.trim();
+        if (!apiKey) {
+          alert("Please enter a valid API Key.");
+          return;
+        }
+        localStorage.setItem("disqusApiKey", apiKey);
+        document.getElementById("apiKeySection").style.display = "none";
+        document.getElementById("changeApiKeyBtn").style.display =
+          "inline-block";
+      }
+
+      function changeApiKey() {
+        document.getElementById("apiKeySection").style.display = "block";
+        document.getElementById("changeApiKeyBtn").style.display = "none";
+      }
+
+      function loadApiKey() {
+        const storedKey = localStorage.getItem("disqusApiKey");
+        if (storedKey) {
+          document.getElementById("apiKeySection").style.display = "none";
+          document.getElementById("changeApiKeyBtn").style.display =
+            "inline-block";
+        }
+      }
+
+      async function fetchUrl(url) {
+        return fetch(url)
+          .then((response) => {
+            return response.json();
+          })
+          .catch((error) => console.error("Error fetching:", error));
+      }
+
+      async function getThreadID(forum, url, apiKey) {
+        try {
+          // const apiUrl = `https://disqus.com/api/3.0/threads/list.json?forum=${forum}&thread:link=${encodeURIComponent(
+          //   url
+          // )}&api_key=${apiKey}`;
+          const apiUrl = `https://disqus.com/api/3.0/threads/list.json?forum=${forum}&thread=link:${encodeURIComponent(
+            url
+          )}&api_key=${apiKey}`;
+          const response = await fetchUrl(
+            proxyUrl + encodeURIComponent(apiUrl)
+          );
+
+          if (response.code === 0 && response.response.length > 0) {
+            return response.response[0].id;
+          } else {
+            alert("Thread not found. Check the forum ID and URL.");
+            return null;
+          }
+        } catch (error) {
+          alert("Error getting thread ID: " + error.message);
+          return null;
+        }
+      }
+
+      async function getUsernamesFromThread(threadID, apiKey) {
+        try {
+          const apiUrl = `https://disqus.com/api/3.0/posts/list.json?thread=${threadID}&api_key=${apiKey}`;
+          const response = await fetchUrl(
+            proxyUrl + encodeURIComponent(apiUrl)
+          );
+
+          if (response.code === 0) {
+            return [
+              ...new Set(response.response.map((post) => post.author.username)),
+            ];
+          } else {
+            alert("Error fetching usernames.");
+            return [];
+          }
+        } catch (error) {
+          alert("Error fetching comments: " + error.message);
+          return [];
+        }
+      }
+
+      async function fetchUsernames() {
+        const forumID = document.getElementById("forumID").value.trim();
+        const threadUrl = document.getElementById("threadUrl").value.trim();
+        const apiKey = localStorage.getItem("disqusApiKey");
+
+        if (!apiKey) {
+          alert("Please enter and save an API Key first.");
+          return;
+        }
+        if (!forumID || !threadUrl) {
+          alert("Please enter a valid Forum ID and Disqus thread URL.");
+          return;
+        }
+
+        const usernamesTextarea = document.getElementById("usernames");
+        usernamesTextarea.value = "Loading...";
+
+        const threadID = await getThreadID(forumID, threadUrl, apiKey);
+        if (threadID) {
+          const usernames = await getUsernamesFromThread(threadID, apiKey);
+          usernamesTextarea.value =
+            usernames.join("\n") || "No usernames found.";
+        } else {
+          usernamesTextarea.value = "No usernames found.";
+        }
+      }
+
+      function copyUsernames() {
+        const usernamesTextarea = document.getElementById("usernames");
+        usernamesTextarea.select();
+        document.execCommand("copy");
+        alert("Usernames copied to clipboard!");
+      }
+
+      window.onload = loadApiKey;
+    </script>
+  </body>
+</html>
