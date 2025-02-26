@@ -75,21 +75,25 @@
       Change API Key
     </button>
 
-    <p>
-      Enter the Disqus forum ID (shortname) and thread URL to get usernames from
-      comments:
-    </p>
-
+    <p>Enter the Disqus embed URL to extract the forum ID:</p>
     <input
       type="text"
-      id="forumID"
-      placeholder="Enter Forum ID (e.g., miruro-no-kuon)"
-      size="40" /><br />
+      id="disqusUrl"
+      placeholder="Enter Disqus Embed URL"
+      size="50"
+      oninput="extractForumID()" />
+    <p>
+      <strong>Extracted Forum ID:</strong>
+      <span id="extractedForumID">None</span>
+    </p>
+
+    <p>Enter the thread URL (this is the actual page where comments are):</p>
     <input
       type="text"
       id="threadUrl"
       placeholder="Enter Disqus Thread URL"
       size="50" />
+
     <button id="fetchBtn" onclick="fetchUsernames()">Get Usernames</button>
 
     <div class="copy-container">
@@ -133,6 +137,44 @@
         }
       }
 
+      function extractForumID() {
+        const disqusUrl = document.getElementById("disqusUrl").value.trim();
+        if (disqusUrl) {
+          localStorage.setItem("disqusUrl", disqusUrl);
+        }
+
+        try {
+          const urlParams = new URLSearchParams(new URL(disqusUrl).search);
+          const forumID = urlParams.get("f");
+
+          if (forumID) {
+            document.getElementById("extractedForumID").textContent = forumID;
+            localStorage.setItem("forumID", forumID);
+          } else {
+            document.getElementById("extractedForumID").textContent =
+              "Invalid URL";
+          }
+        } catch (error) {
+          document.getElementById("extractedForumID").textContent =
+            "Invalid URL";
+        }
+      }
+
+      function loadSavedData() {
+        const storedDisqusUrl = localStorage.getItem("disqusUrl");
+        const storedForumID = localStorage.getItem("forumID");
+        const storedThreadUrl = localStorage.getItem("threadUrl");
+
+        if (storedDisqusUrl) {
+          document.getElementById("disqusUrl").value = storedDisqusUrl;
+          extractForumID();
+        }
+
+        if (storedThreadUrl) {
+          document.getElementById("threadUrl").value = storedThreadUrl;
+        }
+      }
+
       async function fetchUrl(url) {
         return fetch(url)
           .then((response) => response.json())
@@ -151,7 +193,7 @@
           if (response.code === 0 && response.response.length > 0) {
             return response.response[0].id;
           } else {
-            alert("Thread not found. Check the forum ID and URL.");
+            alert("Thread not found. Check the URL.");
             return null;
           }
         } catch (error) {
@@ -163,11 +205,10 @@
       async function getAllUsernames(threadID, apiKey) {
         let usernames = new Set();
         let cursor = null;
-        let commentCount = 0;
+        let totalComments = 0;
 
         const usernamesTextarea = document.getElementById("usernames");
         const userCountSpan = document.getElementById("userCount");
-        const loadingIndicator = document.getElementById("loadingIndicator");
 
         usernamesTextarea.value = "";
 
@@ -188,9 +229,9 @@
                 usernames.add(post.author.username);
                 usernamesTextarea.value += post.author.username + "\n";
               }
-              commentCount++;
             });
 
+            totalComments += response.response.length;
             userCountSpan.textContent = usernames.size;
 
             if (response.cursor?.hasNext) {
@@ -208,7 +249,7 @@
       }
 
       async function fetchUsernames() {
-        const forumID = document.getElementById("forumID").value.trim();
+        const forumID = document.getElementById("extractedForumID").textContent;
         const threadUrl = document.getElementById("threadUrl").value.trim();
         const apiKey = localStorage.getItem("disqusApiKey");
 
@@ -216,44 +257,29 @@
           alert("Please enter and save an API Key first.");
           return;
         }
-        if (!forumID || !threadUrl) {
-          alert("Please enter a valid Forum ID and Disqus thread URL.");
+        if (!forumID || forumID === "Invalid URL") {
+          alert("Please enter a valid Disqus embed URL.");
+          return;
+        }
+        if (!threadUrl) {
+          alert("Please enter a valid thread URL.");
           return;
         }
 
-        const usernamesTextarea = document.getElementById("usernames");
-        const userCountSpan = document.getElementById("userCount");
-        const loadingIndicator = document.getElementById("loadingIndicator");
-        const fetchBtn = document.getElementById("fetchBtn");
-
-        loadingIndicator.style.display = "block";
-        fetchBtn.disabled = true;
-        usernamesTextarea.value = "Loading...";
-        userCountSpan.textContent = "0";
+        document.getElementById("loadingIndicator").style.display = "block";
 
         const threadID = await getThreadID(forumID, threadUrl, apiKey);
         if (threadID) {
-          const usernames = await getAllUsernames(threadID, apiKey);
-          usernamesTextarea.value =
-            usernames.join("\n") || "No usernames found.";
-          userCountSpan.textContent = usernames.length;
-        } else {
-          usernamesTextarea.value = "No usernames found.";
-          userCountSpan.textContent = "0";
+          await getAllUsernames(threadID, apiKey);
         }
 
-        loadingIndicator.style.display = "none";
-        fetchBtn.disabled = false;
+        document.getElementById("loadingIndicator").style.display = "none";
       }
 
-      function copyUsernames() {
-        const usernamesTextarea = document.getElementById("usernames");
-        usernamesTextarea.select();
-        document.execCommand("copy");
-        alert("Usernames copied to clipboard!");
-      }
-
-      window.onload = loadApiKey;
+      window.onload = () => {
+        loadApiKey();
+        loadSavedData();
+      };
     </script>
   </body>
 </html>
