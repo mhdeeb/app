@@ -1,14 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Disqus URL to Usernames</title>
     <style>
-      /* 
-        Define CSS variables for both light & dark themes using [data-theme="..."] 
-        Adjust the colors to your preference.
-      */
       :root[data-theme="light"] {
         --bg-color: #f4f4f4;
         --text-color: #333333;
@@ -18,6 +14,7 @@
         --highlight-color: #4caf50;
         --button-bg-color: #dddddd;
         --button-text-color: #000000;
+        --border-color: #ccc;
       }
 
       :root[data-theme="dark"] {
@@ -29,22 +26,27 @@
         --highlight-color: #4caf50;
         --button-bg-color: #444444;
         --button-text-color: #ffffff;
+        --border-color: #666;
       }
 
-      /* Base styling that uses the variables above */
       html,
-      body {
+      body,
+      input,
+      button,
+      textarea {
         margin: 0;
         padding: 0;
-        background-color: var(--bg-color);
-        color: var(--text-color);
         font-family: Arial, sans-serif;
-        text-align: center;
+        transition: background-color 0.4s ease, color 0.4s ease,
+          border-color 0.4s ease;
       }
 
       body {
+        background-color: var(--bg-color);
+        color: var(--text-color);
         margin: 20px;
         padding: 20px;
+        text-align: center;
       }
 
       input,
@@ -53,8 +55,7 @@
         padding: 10px;
         margin: 10px;
         font-size: 16px;
-        font-family: inherit;
-        border: 1px solid #ccc;
+        border: 1px solid var(--border-color);
         background-color: var(--input-bg-color);
         color: var(--input-text-color);
       }
@@ -63,7 +64,7 @@
         cursor: pointer;
         background-color: var(--button-bg-color);
         color: var(--button-text-color);
-        border: 1px solid #666;
+        border: 1px solid var(--border-color);
       }
 
       button:hover {
@@ -107,7 +108,7 @@
 
       /* Progress Bar Styles */
       #progressContainer {
-        display: none; /* Hidden by default, will show when fetching */
+        display: none;
         width: 80%;
         margin: 10px auto;
         background-color: #ccc;
@@ -134,7 +135,7 @@
 
     <!-- Theme Toggle Button -->
     <button id="themeToggle" onclick="toggleTheme()">
-      Switch to Dark Theme
+      Switch to Light Mode
     </button>
 
     <div id="apiKeySection">
@@ -151,17 +152,18 @@
     </button>
 
     <p>Enter the Disqus embed URL:</p>
+    <!-- Single Input Field (Paste Button Removed) -->
     <input
       type="text"
       id="disqusUrl"
       placeholder="Enter Disqus Embed URL"
       size="50"
       oninput="extractForumAndThread()" />
+
     <p>
       <strong>Extracted Forum ID:</strong>
       <span id="extractedForumID">None</span>
     </p>
-    <!-- Separate displays for t_i and t_u -->
     <p>
       <strong>Thread Ident (t_i):</strong>
       <span id="extractedThreadIdent">None</span>
@@ -192,23 +194,28 @@
     <p id="progressLabel"></p>
 
     <script>
-      // Proxy for bypassing CORS, can be changed or removed if your environment doesn’t need it
       const proxyUrl = "https://api.codetabs.com/v1/proxy?quest=";
 
       /* =================== THEME MANAGEMENT =================== */
       function loadTheme() {
         const savedTheme = localStorage.getItem("theme");
-        const htmlEl = document.documentElement; // or document.body
+        const htmlEl = document.documentElement;
 
-        if (savedTheme === "dark") {
+        if (!savedTheme) {
+          // No saved theme -> default to dark
           htmlEl.setAttribute("data-theme", "dark");
           document.getElementById("themeToggle").textContent =
-            "Switch to Light Theme";
+            "Switch to Light Mode";
         } else {
-          // Default to "light" if nothing is saved
-          htmlEl.setAttribute("data-theme", "light");
-          document.getElementById("themeToggle").textContent =
-            "Switch to Dark Theme";
+          // If a theme was saved, apply it
+          htmlEl.setAttribute("data-theme", savedTheme);
+          if (savedTheme === "dark") {
+            document.getElementById("themeToggle").textContent =
+              "Switch to Light Mode";
+          } else {
+            document.getElementById("themeToggle").textContent =
+              "Switch to Dark Mode";
+          }
         }
       }
 
@@ -223,13 +230,12 @@
         // Update button text
         if (newTheme === "dark") {
           document.getElementById("themeToggle").textContent =
-            "Switch to Light Theme";
+            "Switch to Light Mode";
         } else {
           document.getElementById("themeToggle").textContent =
-            "Switch to Dark Theme";
+            "Switch to Dark Mode";
         }
       }
-      /* ====================================================== */
 
       function saveApiKey() {
         const apiKey = document.getElementById("apiKey").value.trim();
@@ -264,9 +270,6 @@
         }
       }
 
-      /**
-       * Extract forum ID, t_i, and t_u from the embed URL and display them.
-       */
       function extractForumAndThread() {
         const disqusUrl = document.getElementById("disqusUrl").value.trim();
         if (disqusUrl) {
@@ -281,7 +284,6 @@
             ? decodeURIComponent(urlParams.get("t_u"))
             : null;
 
-          // Display forum
           if (forumID) {
             document.getElementById("extractedForumID").textContent = forumID;
             localStorage.setItem("forumID", forumID);
@@ -290,7 +292,6 @@
               "Invalid URL";
           }
 
-          // Display t_i
           if (threadID) {
             document.getElementById("extractedThreadIdent").textContent =
               threadID;
@@ -301,7 +302,6 @@
             localStorage.setItem("threadIdent", "");
           }
 
-          // Display t_u
           if (threadURL) {
             document.getElementById("extractedThreadLink").textContent =
               threadURL;
@@ -336,13 +336,6 @@
         }
       }
 
-      /**
-       * Returns the internal Disqus thread ID given:
-       * - a forum
-       * - a thread reference (either ident:someID or link:https://...)
-       *
-       * If the thread cannot be found, returns null.
-       */
       async function getThreadID(forum, threadRef, apiKey) {
         try {
           const apiUrl = `https://disqus.com/api/3.0/threads/list.json?forum=${forum}&thread=${threadRef}&api_key=${apiKey}`;
@@ -353,7 +346,7 @@
           if (response.code === 0 && response.response.length > 0) {
             return response.response[0].id;
           } else {
-            return null; // returning null to indicate not found
+            return null;
           }
         } catch (error) {
           console.error("Error getting thread ID:", error);
@@ -361,18 +354,13 @@
         }
       }
 
-      /**
-       * Fetches details about the thread to get the total post count (including all comments).
-       */
       async function getTotalPosts(threadID, apiKey) {
         try {
           const apiUrl = `https://disqus.com/api/3.0/threads/details.json?thread=${threadID}&api_key=${apiKey}`;
           const response = await fetchUrl(
             proxyUrl + encodeURIComponent(apiUrl)
           );
-
           if (response.code === 0) {
-            // 'posts' property includes all top-level + child comments
             return response.response.posts;
           } else {
             throw new Error(response.error);
@@ -383,9 +371,6 @@
         }
       }
 
-      /**
-       * Fetches all usernames from the given thread ID and updates the progress bar.
-       */
       async function getAllUsernames(threadID, apiKey, totalPosts) {
         let usernames = new Set();
         let cursor = null;
@@ -403,7 +388,6 @@
         progressBar.style.width = "0%";
         progressLabel.textContent = "";
 
-        // Helper to update the progress bar
         function updateProgress() {
           const percentage =
             totalPosts > 0 ? (processed / totalPosts) * 100 : 0;
@@ -420,25 +404,21 @@
           const response = await fetchUrl(
             proxyUrl + encodeURIComponent(apiUrl)
           );
-
           if (response.code === 0) {
             response.response.forEach((post) => {
               if (post.author && post.author.username) {
                 processed++;
                 usernames.add(post.author.username);
-                // Only append to textarea if it's unique
-                // (Though a set is used, we want to avoid duplicates in the output)
+
                 if (!usernamesTextarea.value.includes(post.author.username)) {
                   usernamesTextarea.value += post.author.username + "\n";
                 }
               }
             });
 
-            // Update user count and progress
             userCountSpan.textContent = usernames.size;
             updateProgress();
 
-            // Move to the next cursor if available
             cursor = response.cursor?.hasNext ? response.cursor?.next : null;
           } else {
             alert("Error fetching usernames: " + response.response);
@@ -446,29 +426,20 @@
           }
         } while (cursor);
 
-        // If totalPosts was 0 or less, hide progress bar or set it to 100%
         if (totalPosts <= 0) {
           progressBar.style.width = "100%";
           progressLabel.textContent = "Processing complete or no posts found.";
         }
       }
 
-      /**
-       * Main function that pulls everything together:
-       * 1) Attempts to get the thread ID via ident:{t_i}.
-       * 2) If that fails (returns null), attempts link:{t_u}.
-       * 3) If successful, fetches total posts and processes them with a progress bar.
-       */
       async function fetchUsernames() {
         const forumID = document.getElementById("extractedForumID").textContent;
         const ident = localStorage.getItem("threadIdent");
         const link = localStorage.getItem("threadLink");
         const apiKey = localStorage.getItem("disqusApiKey");
 
-        // Show loading indicator
         document.getElementById("loadingIndicator").style.display = "block";
 
-        // Reset progress bar before new fetch
         const progressContainer = document.getElementById("progressContainer");
         const progressBar = document.getElementById("progressBar");
         const progressLabel = document.getElementById("progressLabel");
@@ -482,22 +453,18 @@
           return;
         }
 
-        // 1) Try ident if we have a t_i
         let threadID = null;
         if (ident) {
           threadID = await getThreadID(forumID, `ident:${ident}`, apiKey);
         }
 
-        // 2) If ident fails (returns null) and link is available, try link
         if (!threadID && link) {
-          let encodedLink = encodeURIComponent(link);
+          const encodedLink = encodeURIComponent(link);
           threadID = await getThreadID(forumID, `link:${encodedLink}`, apiKey);
         }
 
         if (threadID) {
-          // Now retrieve total post count
           const totalPosts = await getTotalPosts(threadID, apiKey);
-          // Retrieve all usernames with progress
           await getAllUsernames(threadID, apiKey, totalPosts);
         } else {
           alert(
@@ -511,17 +478,11 @@
       function copyUsernames() {
         const usernamesTextarea = document.getElementById("usernames");
         usernamesTextarea.select();
-        usernamesTextarea.setSelectionRange(0, 99999); // For mobile devices
+        usernamesTextarea.setSelectionRange(0, 99999);
         document.execCommand("copy");
         alert("Usernames copied to clipboard!");
       }
 
-      /**
-       * On page load:
-       * 1) Load (and apply) any saved theme.
-       * 2) Load the saved API key if present.
-       * 3) Load any saved Disqus URL / thread data.
-       */
       window.onload = () => {
         loadTheme();
         loadApiKey();
