@@ -119,9 +119,6 @@
 
       async function getThreadID(forum, url, apiKey) {
         try {
-          // const apiUrl = `https://disqus.com/api/3.0/threads/list.json?forum=${forum}&thread:link=${encodeURIComponent(
-          //   url
-          // )}&api_key=${apiKey}`;
           const apiUrl = `https://disqus.com/api/3.0/threads/list.json?forum=${forum}&thread=link:${encodeURIComponent(
             url
           )}&api_key=${apiKey}`;
