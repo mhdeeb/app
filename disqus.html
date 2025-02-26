@@ -1,16 +1,50 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Disqus URL to Usernames</title>
     <style>
+      /* 
+        Define CSS variables for both light & dark themes using [data-theme="..."] 
+        Adjust the colors to your preference.
+      */
+      :root[data-theme="light"] {
+        --bg-color: #f4f4f4;
+        --text-color: #333333;
+        --secondary-bg-color: #ffffff;
+        --input-bg-color: #ffffff;
+        --input-text-color: #000000;
+        --highlight-color: #4caf50;
+        --button-bg-color: #dddddd;
+        --button-text-color: #000000;
+      }
+
+      :root[data-theme="dark"] {
+        --bg-color: #1e1e1e;
+        --text-color: #f4f4f4;
+        --secondary-bg-color: #333333;
+        --input-bg-color: #333333;
+        --input-text-color: #ffffff;
+        --highlight-color: #4caf50;
+        --button-bg-color: #444444;
+        --button-text-color: #ffffff;
+      }
+
+      /* Base styling that uses the variables above */
+      html,
       body {
+        margin: 0;
+        padding: 0;
+        background-color: var(--bg-color);
+        color: var(--text-color);
         font-family: Arial, sans-serif;
+        text-align: center;
+      }
+
+      body {
         margin: 20px;
         padding: 20px;
-        background-color: #f4f4f4;
-        text-align: center;
       }
 
       input,
@@ -19,13 +53,27 @@
         padding: 10px;
         margin: 10px;
         font-size: 16px;
+        font-family: inherit;
+        border: 1px solid #ccc;
+        background-color: var(--input-bg-color);
+        color: var(--input-text-color);
+      }
+
+      button {
+        cursor: pointer;
+        background-color: var(--button-bg-color);
+        color: var(--button-text-color);
+        border: 1px solid #666;
+      }
+
+      button:hover {
+        opacity: 0.9;
       }
 
       textarea {
         width: 80%;
         height: 150px;
         resize: none;
-        font-family: monospace;
       }
 
       .copy-container {
@@ -39,8 +87,8 @@
         margin-top: 10px;
         font-size: 18px;
         font-weight: bold;
-        color: #333;
-        background: #fff;
+        background: var(--secondary-bg-color);
+        color: var(--text-color);
         padding: 8px 12px;
         border-radius: 5px;
         display: inline-block;
@@ -49,7 +97,7 @@
       #loadingIndicator {
         display: none;
         font-size: 16px;
-        color: #ff4500;
+        color: var(--highlight-color);
         margin-top: 5px;
       }
 
@@ -70,7 +118,7 @@
       #progressBar {
         height: 20px;
         width: 0;
-        background-color: #4caf50;
+        background-color: var(--highlight-color);
         transition: width 0.2s ease-in-out;
       }
 
@@ -83,6 +131,11 @@
 
   <body>
     <h2>Disqus URL to Usernames</h2>
+
+    <!-- Theme Toggle Button -->
+    <button id="themeToggle" onclick="toggleTheme()">
+      Switch to Dark Theme
+    </button>
 
     <div id="apiKeySection">
       <input
@@ -141,6 +194,42 @@
     <script>
       // Proxy for bypassing CORS, can be changed or removed if your environment doesn’t need it
       const proxyUrl = "https://api.codetabs.com/v1/proxy?quest=";
+
+      /* =================== THEME MANAGEMENT =================== */
+      function loadTheme() {
+        const savedTheme = localStorage.getItem("theme");
+        const htmlEl = document.documentElement; // or document.body
+
+        if (savedTheme === "dark") {
+          htmlEl.setAttribute("data-theme", "dark");
+          document.getElementById("themeToggle").textContent =
+            "Switch to Light Theme";
+        } else {
+          // Default to "light" if nothing is saved
+          htmlEl.setAttribute("data-theme", "light");
+          document.getElementById("themeToggle").textContent =
+            "Switch to Dark Theme";
+        }
+      }
+
+      function toggleTheme() {
+        const htmlEl = document.documentElement;
+        const currentTheme = htmlEl.getAttribute("data-theme");
+        const newTheme = currentTheme === "light" ? "dark" : "light";
+
+        htmlEl.setAttribute("data-theme", newTheme);
+        localStorage.setItem("theme", newTheme);
+
+        // Update button text
+        if (newTheme === "dark") {
+          document.getElementById("themeToggle").textContent =
+            "Switch to Light Theme";
+        } else {
+          document.getElementById("themeToggle").textContent =
+            "Switch to Dark Theme";
+        }
+      }
+      /* ====================================================== */
 
       function saveApiKey() {
         const apiKey = document.getElementById("apiKey").value.trim();
@@ -427,7 +516,14 @@
         alert("Usernames copied to clipboard!");
       }
 
+      /**
+       * On page load:
+       * 1) Load (and apply) any saved theme.
+       * 2) Load the saved API key if present.
+       * 3) Load any saved Disqus URL / thread data.
+       */
       window.onload = () => {
+        loadTheme();
         loadApiKey();
         loadSavedData();
       };
