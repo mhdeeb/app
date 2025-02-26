@@ -25,12 +25,32 @@
         width: 80%;
         height: 150px;
         resize: none;
+        font-family: monospace;
       }
 
       .copy-container {
         display: flex;
-        justify-content: center;
+        flex-direction: column;
         align-items: center;
+        margin-top: 10px;
+      }
+
+      #userCountContainer {
+        margin-top: 10px;
+        font-size: 18px;
+        font-weight: bold;
+        color: #333;
+        background: #fff;
+        padding: 8px 12px;
+        border-radius: 5px;
+        display: inline-block;
+      }
+
+      #loadingIndicator {
+        display: none;
+        font-size: 16px;
+        color: #ff4500;
+        margin-top: 5px;
       }
 
       #apiKeySection {
@@ -70,7 +90,7 @@
       id="threadUrl"
       placeholder="Enter Disqus Thread URL"
       size="50" />
-    <button onclick="fetchUsernames()">Get Usernames</button>
+    <button id="fetchBtn" onclick="fetchUsernames()">Get Usernames</button>
 
     <div class="copy-container">
       <textarea
@@ -79,6 +99,10 @@
         placeholder="Usernames will appear here..."></textarea>
       <button onclick="copyUsernames()">Copy</button>
     </div>
+
+    <p id="userCountContainer">Total Users: <span id="userCount">0</span></p>
+
+    <p id="loadingIndicator">🔄 Collecting usernames...</p>
 
     <script>
       const proxyUrl = "https://api.codetabs.com/v1/proxy?quest=";
@@ -139,12 +163,15 @@
       async function getAllUsernames(threadID, apiKey) {
         let usernames = new Set();
         let cursor = null;
-        let page = 1;
+        let commentCount = 0;
 
         const usernamesTextarea = document.getElementById("usernames");
+        const userCountSpan = document.getElementById("userCount");
+        const loadingIndicator = document.getElementById("loadingIndicator");
+
+        usernamesTextarea.value = "";
 
         do {
-          usernamesTextarea.value = `Fetching page ${page}...`;
           let apiUrl = `https://disqus.com/api/3.0/posts/list.json?thread=${threadID}&api_key=${apiKey}&limit=100`;
 
           if (cursor) {
@@ -156,15 +183,21 @@
           );
 
           if (response.code === 0) {
-            response.response.forEach((post) =>
-              usernames.add(post.author.username)
-            );
+            response.response.forEach((post) => {
+              if (!usernames.has(post.author.username)) {
+                usernames.add(post.author.username);
+                usernamesTextarea.value += post.author.username + "\n";
+              }
+              commentCount++;
+            });
+
+            userCountSpan.textContent = usernames.size;
+
             if (response.cursor?.hasNext) {
               cursor = response.cursor?.next || null;
             } else {
               cursor = null;
             }
-            page++;
           } else {
             alert("Error fetching usernames.");
             break;
@@ -189,16 +222,28 @@
         }
 
         const usernamesTextarea = document.getElementById("usernames");
+        const userCountSpan = document.getElementById("userCount");
+        const loadingIndicator = document.getElementById("loadingIndicator");
+        const fetchBtn = document.getElementById("fetchBtn");
+
+        loadingIndicator.style.display = "block";
+        fetchBtn.disabled = true;
         usernamesTextarea.value = "Loading...";
+        userCountSpan.textContent = "0";
 
         const threadID = await getThreadID(forumID, threadUrl, apiKey);
         if (threadID) {
           const usernames = await getAllUsernames(threadID, apiKey);
           usernamesTextarea.value =
             usernames.join("\n") || "No usernames found.";
+          userCountSpan.textContent = usernames.length;
         } else {
           usernamesTextarea.value = "No usernames found.";
+          userCountSpan.textContent = "0";
         }
+
+        loadingIndicator.style.display = "none";
+        fetchBtn.disabled = false;
       }
 
       function copyUsernames() {
